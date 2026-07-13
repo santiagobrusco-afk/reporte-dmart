@@ -3,8 +3,6 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-import base64
-from io import BytesIO
 import matplotlib.colors as mcolors
 import warnings
 
@@ -137,28 +135,7 @@ if ops_file is not None and audit_file is not None:
         cuad_sin_trac = len(df_pivot[df_pivot['Cuadrante_Grafico'] == 'Sin Tracción: Pierde Vol, FR Controlado'])
         cuad_alerta = len(df_pivot[df_pivot['Cuadrante_Grafico'] == 'Alerta: Pierde Vol y Sube FR'])
 
-        # 7. Gráfico Base64
-        plt.rcParams['font.family'] = 'sans-serif'
-        sns.set_theme(style="whitegrid", context="talk")
-        fig_mat, ax_mat = plt.subplots(figsize=(11, 5.5))
-        palette = {"Éxito: Gana Vol, FR Controlado": "#27ae60", "Fricción: Gana Vol, pero Sube FR": "#f39c12", "Sin Tracción: Pierde Vol, FR Controlado": "#95a5a6", "Alerta: Pierde Vol y Sube FR": "#c0392b"}
-        sns.scatterplot(data=df_pivot, x='delta_fail_rate', y='delta_volumen_diario', hue='Cuadrante_Grafico', palette=palette, s=150, alpha=0.85, edgecolor='black', ax=ax_mat)
-        ax_mat.axvline(x=0, color='#2c3e50', linestyle='--', linewidth=1.5, alpha=0.5)
-        ax_mat.axhline(y=0, color='#2c3e50', linestyle='--', linewidth=1.5, alpha=0.5)
-        ax_mat.set_title('Matriz de Impacto: Órdenes Incrementales vs Variación de Fail Rate', fontsize=15, weight='bold', pad=15)
-        ax_mat.set_xlabel('Variación de Fail Rate (%)', weight='bold', fontsize=12)
-        ax_mat.set_ylabel('Órdenes Adicionales por Día', weight='bold', fontsize=12)
-        ax_mat.legend(title='Lectura del Cuadrante', bbox_to_anchor=(1.02, 1), loc='upper left', fontsize=11, title_fontsize=12)
-        sns.despine()
-        plt.tight_layout()
-        
-        buf = BytesIO()
-        fig_mat.savefig(buf, format='png', bbox_inches='tight', dpi=100, transparent=True)
-        buf.seek(0)
-        img_mat_b64 = base64.b64encode(buf.read()).decode('utf-8')
-        plt.close(fig_mat)
-
-        # 8. HTML Output
+        # 7. Formateo y Renderizado HTML (SIN BASE64)
         def fmt_1d(val): return f"{round(val, 1):g}%"
         def fmt_val(val): return f"{round(val, 1)}" if pd.notnull(val) else "0.0"
         def get_color_gradient(val, min_val, max_val, is_higher_better=True):
@@ -171,8 +148,11 @@ if ops_file is not None and audit_file is not None:
         min_dt, max_dt = df_pivot['delta_dt'].min(), df_pivot['delta_dt'].max()
         min_sea, max_sea = df_pivot['delta_seamless'].min(), df_pivot['delta_seamless'].max()
 
+        # --- BLOQUE 1: TARJETAS EJECUTIVAS ---
         html_ejecutivo = f"""
-        <div style="background-color: #fff; border: 1px solid #bdc3c7; border-radius: 8px; padding: 20px; margin-bottom: 35px; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
+        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+        <style> * {{ font-family: 'Outfit', sans-serif !important; }} </style>
+        <div style="background-color: #fff; border: 1px solid #bdc3c7; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
             <div style="display: flex; gap: 15px; margin-bottom: 20px;">
                 <div style="flex: 1; background-color: #f8f9fa; border-left: 4px solid #34495e; padding: 15px; border-radius: 4px;">
                     <div style="font-size: 11px; color: #7f8c8d; font-weight: bold; text-transform: uppercase;">Dmarts Modificados</div>
@@ -191,47 +171,61 @@ if ops_file is not None and audit_file is not None:
                     <div style="font-size: 24px; color: #d35400; font-weight: 900;">{fmt_1d(fr_global)}</div>
                 </div>
             </div>
+            <div style="font-size: 13px; color: #34495e; font-weight: bold; margin-bottom: 8px;">Estado de la Red (Tiendas por Cuadrante):</div>
+            <div style="display: flex; height: 25px; border-radius: 4px; overflow: hidden; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);">
+                <div style="width: {(cuad_exito/total_tiendas)*100}%; background-color: #27ae60; color: #fff; text-align: center; line-height: 25px; font-size: 12px; font-weight: bold;">Éxito ({cuad_exito})</div>
+                <div style="width: {(cuad_friccion/total_tiendas)*100}%; background-color: #f39c12; color: #fff; text-align: center; line-height: 25px; font-size: 12px; font-weight: bold;">Fricción ({cuad_friccion})</div>
+                <div style="width: {(cuad_sin_trac/total_tiendas)*100}%; background-color: #95a5a6; color: #fff; text-align: center; line-height: 25px; font-size: 12px; font-weight: bold;">Sin Tracción ({cuad_sin_trac})</div>
+                <div style="width: {(cuad_alerta/total_tiendas)*100}%; background-color: #c0392b; color: #fff; text-align: center; line-height: 25px; font-size: 12px; font-weight: bold;">Alerta ({cuad_alerta})</div>
+            </div>
         </div>
         """
+        st.markdown(html_ejecutivo, unsafe_allow_html=True)
 
-        table_perf = """<div style="max-height: 420px; overflow-y: auto; border: 1px solid #bdc3c7; border-radius: 4px;"><table style="width: 100%; border-collapse: collapse; font-size: 11px; background-color: #fff;"><thead style="position: sticky; top: 0; background-color: #2980b9; color: #fff; z-index: 1;"><tr><th style="padding: 10px; text-align: left;">Dmart</th><th style="padding: 10px; text-align: center;">Vol Incremental/Día</th><th style="padding: 10px; text-align: center; background-color: #21618c;">FR After</th><th style="padding: 10px; text-align: center; background-color: #21618c;">Var. FR</th><th style="padding: 10px; text-align: center; background-color: #1f618d;">DT After</th><th style="padding: 10px; text-align: center; background-color: #1f618d;">Var. DT</th><th style="padding: 10px; text-align: center; background-color: #1a5276;">Seamless After</th><th style="padding: 10px; text-align: center; background-color: #1a5276;">Var. Seamless</th><th style="padding: 10px; text-align: left;">Diagnóstico Operativo</th></tr></thead><tbody>"""
+        # --- BLOQUE 2: GRÁFICO (NATIVO DE STREAMLIT) ---
+        plt.rcParams['font.family'] = 'sans-serif'
+        sns.set_theme(style="whitegrid", context="talk")
+        fig_mat, ax_mat = plt.subplots(figsize=(11, 5.5))
+        # Fondo transparente para que quede bien en el modo oscuro de Streamlit
+        fig_mat.patch.set_alpha(0.0)
+        ax_mat.patch.set_alpha(0.0)
+        
+        palette = {"Éxito: Gana Vol, FR Controlado": "#27ae60", "Fricción: Gana Vol, pero Sube FR": "#f39c12", "Sin Tracción: Pierde Vol, FR Controlado": "#95a5a6", "Alerta: Pierde Vol y Sube FR": "#c0392b"}
+        sns.scatterplot(data=df_pivot, x='delta_fail_rate', y='delta_volumen_diario', hue='Cuadrante_Grafico', palette=palette, s=150, alpha=0.85, edgecolor='black', ax=ax_mat)
+        
+        # Ajustamos el color de las líneas para que se vean bien en modo oscuro/claro
+        ax_mat.axvline(x=0, color='gray', linestyle='--', linewidth=1.5, alpha=0.5)
+        ax_mat.axhline(y=0, color='gray', linestyle='--', linewidth=1.5, alpha=0.5)
+        ax_mat.set_title('Matriz de Impacto: Órdenes Incrementales vs Variación de Fail Rate', fontsize=15, weight='bold', pad=15)
+        ax_mat.set_xlabel('Variación de Fail Rate (%)', weight='bold', fontsize=12)
+        ax_mat.set_ylabel('Órdenes Adicionales por Día', weight='bold', fontsize=12)
+        ax_mat.legend(title='Lectura del Cuadrante', bbox_to_anchor=(1.02, 1), loc='upper left', fontsize=11, title_fontsize=12)
+        sns.despine()
+        
+        st.pyplot(fig_mat)
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # --- BLOQUE 3: TABLA DE HEATMAP ---
+        table_perf = """<div style="max-height: 500px; overflow-y: auto; border: 1px solid #bdc3c7; border-radius: 4px;"><table style="width: 100%; border-collapse: collapse; font-size: 13px; background-color: #fff;"><thead style="position: sticky; top: 0; background-color: #2980b9; color: #fff; z-index: 1;"><tr><th style="padding: 10px; text-align: left;">Dmart</th><th style="padding: 10px; text-align: center;">Vol Incremental/Día</th><th style="padding: 10px; text-align: center; background-color: #21618c;">FR After</th><th style="padding: 10px; text-align: center; background-color: #21618c;">Var. FR</th><th style="padding: 10px; text-align: center; background-color: #1f618d;">DT After</th><th style="padding: 10px; text-align: center; background-color: #1f618d;">Var. DT</th><th style="padding: 10px; text-align: center; background-color: #1a5276;">Seamless After</th><th style="padding: 10px; text-align: center; background-color: #1a5276;">Var. Seamless</th><th style="padding: 10px; text-align: left;">Diagnóstico Operativo</th></tr></thead><tbody>"""
         for _, row in df_pivot.iterrows():
             vol_val = row['delta_volumen_diario']
             vol_str, vol_style = (f"+{fmt_val(vol_val)}", "color: #27ae60; font-weight: bold;") if vol_val > 0 else (f"{fmt_val(vol_val)}", "color: #c0392b; font-weight: bold;")
             fr_style = "color: #c0392b; font-weight: bold;" if row['fail_rate_after'] >= 8.5 else "color: #2c3e50;"
+            fr_delta, dt_delta, sea_delta = row['delta_fail_rate'], row['delta_dt'], row['delta_seamless']
             
-            fr_delta = row['delta_fail_rate']
             fr_delta_str = f"+{fmt_1d(fr_delta)}" if fr_delta > 0 else f"{fmt_1d(fr_delta)}"
             fr_color = get_color_gradient(fr_delta, min_fr, max_fr, is_higher_better=False)
-            
-            dt_delta = row['delta_dt']
             dt_delta_str = f"+{fmt_val(dt_delta)} min" if dt_delta > 0 else f"{fmt_val(dt_delta)} min"
             dt_color = get_color_gradient(dt_delta, min_dt, max_dt, is_higher_better=False)
-            
-            sea_delta = row['delta_seamless']
             sea_delta_str = f"+{fmt_val(sea_delta)}%" if sea_delta > 0 else f"{fmt_val(sea_delta)}%"
             sea_color = get_color_gradient(sea_delta, min_sea, max_sea, is_higher_better=True)
-
             diag_parts = row['Diagnostico'].split(" | ")
-            diag_html = f"<span style='font-size: 11px;'><b>{diag_parts[0]}</b><br>{diag_parts[1]}</span>"
+            diag_html = f"<span style='font-size: 12px;'><b>{diag_parts[0]}</b><br>{diag_parts[1]}</span>"
 
-            table_perf += f"""<tr style="border-bottom: 1px solid #ecf0f1;"><td style="padding: 8px 10px; font-weight: bold; color: #2c3e50;">{row['warehouse_name']}</td><td style="padding: 8px 10px; text-align: center; {vol_style}">{vol_str}</td><td style="padding: 8px 10px; text-align: center; {fr_style}">{fmt_1d(row['fail_rate_after'])}</td><td style="padding: 8px 10px; text-align: center; font-weight: bold; color: {fr_color};">{fr_delta_str}</td><td style="padding: 8px 10px; text-align: center; color: #2c3e50;">{fmt_val(row['dt_promedio_after'])} min</td><td style="padding: 8px 10px; text-align: center; font-weight: bold; color: {dt_color};">{dt_delta_str}</td><td style="padding: 8px 10px; text-align: center; font-weight: bold; color: #2c3e50;">{fmt_1d(row['seamless_after'])}</td><td style="padding: 8px 10px; text-align: center; font-weight: bold; color: {sea_color};">{sea_delta_str}</td><td style="padding: 8px 10px; text-align: left; color: #34495e;">{diag_html}</td></tr>"""
+            table_perf += f"""<tr style="border-bottom: 1px solid #ecf0f1;"><td style="padding: 10px 12px; font-weight: bold; color: #2c3e50;">{row['warehouse_name']}</td><td style="padding: 10px 12px; text-align: center; {vol_style}">{vol_str}</td><td style="padding: 10px 12px; text-align: center; {fr_style}">{fmt_1d(row['fail_rate_after'])}</td><td style="padding: 10px 12px; text-align: center; font-weight: bold; color: {fr_color};">{fr_delta_str}</td><td style="padding: 10px 12px; text-align: center; color: #2c3e50;">{fmt_val(row['dt_promedio_after'])} min</td><td style="padding: 10px 12px; text-align: center; font-weight: bold; color: {dt_color};">{dt_delta_str}</td><td style="padding: 10px 12px; text-align: center; font-weight: bold; color: #2c3e50;">{fmt_1d(row['seamless_after'])}</td><td style="padding: 10px 12px; text-align: center; font-weight: bold; color: {sea_color};">{sea_delta_str}</td><td style="padding: 10px 12px; text-align: left; color: #34495e;">{diag_html}</td></tr>"""
         table_perf += "</tbody></table></div>"
 
-        html_final = f"""
-        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-        <style> * {{ font-family: 'Outfit', sans-serif !important; }} </style>
-        <div style="width: 100%; max-width: 1200px; margin: 0 auto; padding: 20px; font-family: 'Outfit', sans-serif;">
-            {html_ejecutivo}
-            <div style="display: flex; justify-content: center; margin-bottom: 25px;">
-                <img src="data:image/png;base64,{img_mat_b64}" style="width: 100%; max-height: 400px; object-fit: contain;">
-            </div>
-            {table_perf}
-        </div>
-        """
-        
-        # Renderizamos el HTML directamente en la App
-        st.markdown(html_final, unsafe_allow_html=True)
+        st.markdown(table_perf, unsafe_allow_html=True)
 
 else:
     st.info("👈 Por favor, subí ambos archivos CSV en el panel de la izquierda para comenzar el análisis.")
