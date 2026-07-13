@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import altair as alt
+import plotly.express as px
 import warnings
 
 warnings.filterwarnings('ignore')
@@ -9,7 +9,7 @@ warnings.filterwarnings('ignore')
 # --- CONFIGURACIÓN NATIVA DE LA APP ---
 st.set_page_config(page_title="Performance Extensiones", page_icon="📊", layout="wide")
 
-# CSS mínimo solo para afinar detalles nativos
+# CSS mínimo solo para afinar detalles nativos (nada de HTML estructural)
 st.markdown("""
     <style>
         .block-container { padding-top: 2rem; padding-bottom: 2rem; }
@@ -126,7 +126,7 @@ if ops_file and audit_file:
         df_pivot['Cuadrante_Grafico'] = df_pivot.apply(categorizar_cuadrante, axis=1)
         df_pivot = df_pivot.sort_values(by='delta_volumen_diario', ascending=False).reset_index(drop=True)
 
-        # Preparamos las columnas redondeadas para que el tooltip se vea hermoso
+        # Redondeos para que el tooltip se vea prolijo
         df_pivot['delta_volumen_diario_round'] = df_pivot['delta_volumen_diario'].round(1)
         df_pivot['delta_fail_rate_round'] = df_pivot['delta_fail_rate'].round(1)
 
@@ -142,7 +142,7 @@ if ops_file and audit_file:
         volumen_neto_ganado = run_rate_nacional * dias_after_periodo
 
         # ==============================================================================
-        # 6. RENDERIZADO UX/UI - NATIVO STREAMLIT Y ALTAIR
+        # 6. RENDERIZADO 100% NATIVO DE STREAMLIT
         # ==============================================================================
         
         st.divider()
@@ -167,38 +167,55 @@ if ops_file and audit_file:
         # --- NAVEGACIÓN POR PESTAÑAS ---
         tab_matriz, tab_tabla, tab_mapa = st.tabs(["📈 Matriz de Impacto Visual", "📋 Diagnóstico Granular", "🗺️ Mapeo de Implementaciones"])
 
-        # PESTAÑA 1: MATRIZ (USANDO ALTAIR)
+        # PESTAÑA 1: MATRIZ (PLOTLY BLOQUEADO)
         with tab_matriz:
-            # Definimos los colores exactos para el gráfico de Altair
-            domain = ["Éxito: Gana Vol, FR Controlado", "Fricción: Gana Vol, pero Sube FR", "Sin Tracción: Pierde Vol, FR Controlado", "Alerta: Pierde Vol y Sube FR"]
-            range_ = ["#27ae60", "#f39c12", "#95a5a6", "#c0392b"]
+            col_chart, col_spacer = st.columns([10, 1])
+            with col_chart:
+                
+                color_map = {
+                    "Éxito: Gana Vol, FR Controlado": "#27ae60",
+                    "Fricción: Gana Vol, pero Sube FR": "#f39c12",
+                    "Sin Tracción: Pierde Vol, FR Controlado": "#95a5a6",
+                    "Alerta: Pierde Vol y Sube FR": "#c0392b"
+                }
 
-            # Capa 1: Burbujas con Tooltips (sin zoom)
-            scatter = alt.Chart(df_pivot).mark_circle(size=140, opacity=0.85, stroke='black', strokeWidth=0.5).encode(
-                x=alt.X('delta_fail_rate:Q', title='Variación de Fail Rate (%)', axis=alt.Axis(gridColor='#ecf0f1')),
-                y=alt.Y('delta_volumen_diario:Q', title='Órdenes Adicionales por Día', axis=alt.Axis(gridColor='#ecf0f1')),
-                color=alt.Color('Cuadrante_Grafico:N', scale=alt.Scale(domain=domain, range=range_), 
-                                legend=alt.Legend(title="Lectura del Cuadrante", orient='top')),
-                tooltip=[
-                    alt.Tooltip('warehouse_name:N', title='Dmart'),
-                    alt.Tooltip('delta_volumen_diario_round:Q', title='Volumen Extra (órd/día)'),
-                    alt.Tooltip('delta_fail_rate_round:Q', title='Variación de FR (%)')
-                ]
-            )
+                fig = px.scatter(
+                    df_pivot,
+                    x='delta_fail_rate',
+                    y='delta_volumen_diario',
+                    color='Cuadrante_Grafico',
+                    color_discrete_map=color_map,
+                    hover_name='warehouse_name',
+                    hover_data={
+                        'delta_fail_rate': False, 
+                        'delta_volumen_diario': False,
+                        'Cuadrante_Grafico': False,
+                        'delta_fail_rate_round': True,
+                        'delta_volumen_diario_round': True
+                    },
+                    labels={
+                        'delta_fail_rate_round': 'Var. Fail Rate (%)',
+                        'delta_volumen_diario_round': 'Volumen Extra (órd/día)',
+                        'Cuadrante_Grafico': 'Cuadrante'
+                    }
+                )
 
-            # Capa 2: Línea base (0,0) Horizontal y Vertical
-            hline = alt.Chart(pd.DataFrame({'y': [0]})).mark_rule(color='#7f8c8d', strokeDash=[4, 4]).encode(y='y:Q')
-            vline = alt.Chart(pd.DataFrame({'x': [0]})).mark_rule(color='#7f8c8d', strokeDash=[4, 4]).encode(x='x:Q')
+                fig.update_traces(marker=dict(size=14, line=dict(width=1, color='DarkSlateGrey')))
+                
+                fig.add_vline(x=0, line_dash="dash", line_color="gray", opacity=0.6)
+                fig.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.6)
 
-            # Ensamblamos el gráfico final
-            final_chart = (hline + vline + scatter).properties(
-                height=450
-            ).configure_view(
-                strokeWidth=0 # Quita el borde exterior del gráfico para que se vea integrado
-            )
-
-            # Renderizamos en Streamlit
-            st.altair_chart(final_chart, use_container_width=True)
+                # Bloqueo total de zoom y paneo
+                fig.update_layout(
+                    xaxis=dict(fixedrange=True, title='Variación de Fail Rate (%)'),
+                    yaxis=dict(fixedrange=True, title='Órdenes Adicionales por Día'),
+                    dragmode=False, # Impide seleccionar para hacer zoom
+                    legend_title_text='Lectura del Cuadrante',
+                    margin=dict(l=20, r=20, t=20, b=20)
+                )
+                
+                # Desactivamos por completo la ModeBar (la barra flotante de herramientas)
+                st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
         # PESTAÑA 2: TABLA INTERACTIVA (PANDAS STYLER)
         with tab_tabla:
