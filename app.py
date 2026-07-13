@@ -10,12 +10,10 @@ warnings.filterwarnings('ignore')
 # --- CONFIGURACIÓN DE LA APP ---
 st.set_page_config(page_title="Performance Extensiones", layout="wide", initial_sidebar_state="expanded")
 
-# --- CSS PARA AJUSTAR LA UI (Minimalista y limpio) ---
+# --- CSS GLOBAL ---
 st.markdown("""
     <style>
         * { font-family: 'Outfit', sans-serif !important; }
-        .stMetric { background-color: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #e0e0e0; }
-        div[data-testid="stMetricValue"] { color: #2c3e50; font-weight: 800; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -140,31 +138,49 @@ if ops_file is not None and audit_file is not None:
         run_rate_nacional = df_pivot['delta_volumen_diario'].sum()
         volumen_neto_ganado = run_rate_nacional * dias_after_periodo
 
+        def fmt_1d(val): return f"{round(val, 1):g}%"
+        def fmt_val(val): return f"{round(val, 1)}" if pd.notnull(val) else "0.0"
+
         # ==============================================================================
-        # 6. RENDERIZADO UX/UI - NATIVO STREAMLIT
+        # 6. RENDERIZADO UX/UI - TARJETAS EJECUTIVAS A MEDIDA
         # ==============================================================================
-        
-        # --- BLOQUE EJECUTIVO (KPI CARDS) ---
         st.subheader("Resumen de Impacto Global")
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("🏪 Dmarts Modificados", f"{total_tiendas}")
-        col2.metric("📦 Volumen Neto Ganado", f"+{int(volumen_neto_ganado):,} órdenes")
-        col3.metric("🚀 Run-Rate Incremental", f"+{run_rate_nacional:.1f} órd/día")
-        col4.metric("⚠️ Fail Rate Global", f"{fr_global:.1f}%")
         
-        st.markdown("<br>", unsafe_allow_html=True)
+        # Tarjetas visuales inyectadas con HTML/CSS
+        html_kpis = f"""
+        <div style="display: flex; gap: 15px; margin-bottom: 25px;">
+            <div style="flex: 1; background-color: #f8f9fa; border-left: 4px solid #34495e; padding: 20px; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+                <div style="font-size: 11px; color: #7f8c8d; font-weight: bold; text-transform: uppercase; margin-bottom: 5px;">🏪 Dmarts Modificados</div>
+                <div style="font-size: 26px; color: #2c3e50; font-weight: 900;">{total_tiendas}</div>
+            </div>
+            <div style="flex: 1; background-color: #eaf2f8; border-left: 4px solid #2980b9; padding: 20px; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+                <div style="font-size: 11px; color: #2471a3; font-weight: bold; text-transform: uppercase; margin-bottom: 5px;">📦 Volumen Neto Ganado</div>
+                <div style="font-size: 26px; color: #21618c; font-weight: 900;">+{int(volumen_neto_ganado):,} <span style="font-size: 13px; color: #5499c7; font-weight: normal;">órdenes</span></div>
+            </div>
+            <div style="flex: 1; background-color: #e8f6f3; border-left: 4px solid #27ae60; padding: 20px; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+                <div style="font-size: 11px; color: #27ae60; font-weight: bold; text-transform: uppercase; margin-bottom: 5px;">🚀 Run-Rate Incremental</div>
+                <div style="font-size: 26px; color: #27ae60; font-weight: 900;">+{fmt_val(run_rate_nacional)} <span style="font-size: 13px; color: #27ae60; opacity: 0.8; font-weight: normal;">órd/día</span></div>
+            </div>
+            <div style="flex: 1; background-color: #fcf3cf; border-left: 4px solid #f39c12; padding: 20px; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+                <div style="font-size: 11px; color: #d35400; font-weight: bold; text-transform: uppercase; margin-bottom: 5px;">⚠️ Fail Rate Global</div>
+                <div style="font-size: 26px; color: #d35400; font-weight: 900;">{fmt_1d(fr_global)}</div>
+            </div>
+        </div>
+        """
+        st.markdown(html_kpis, unsafe_allow_html=True)
 
         # --- NAVEGACIÓN POR PESTAÑAS (TABS) ---
         tab_matriz, tab_tabla, tab_mapa = st.tabs(["📈 Matriz de Impacto Visual", "📋 Diagnóstico por Tienda", "🗺️ Mapeo de Implementaciones"])
 
         # PESTAÑA 1: MATRIZ
         with tab_matriz:
-            col_chart, col_spacer = st.columns([8, 1]) # Centrado visual
+            st.markdown("<br>", unsafe_allow_html=True)
+            col_chart, col_spacer = st.columns([8, 1])
             with col_chart:
                 plt.rcParams['font.family'] = 'sans-serif'
                 sns.set_theme(style="whitegrid", context="talk")
                 fig_mat, ax_mat = plt.subplots(figsize=(10, 5))
-                fig_mat.patch.set_facecolor('white') # Fuerza contraste limpio
+                fig_mat.patch.set_facecolor('white') 
                 ax_mat.set_facecolor('white')
                 
                 palette = {"Éxito: Gana Vol, FR Controlado": "#27ae60", "Fricción: Gana Vol, pero Sube FR": "#f39c12", "Sin Tracción: Pierde Vol, FR Controlado": "#95a5a6", "Alerta: Pierde Vol y Sube FR": "#c0392b"}
@@ -182,14 +198,12 @@ if ops_file is not None and audit_file is not None:
 
         # PESTAÑA 2: TABLA INTERACTIVA (PANDAS STYLER)
         with tab_tabla:
-            st.info("💡 **Tip:** Podés hacer clic en los nombres de las columnas para ordenar la tabla, o tocar la lupa arriba a la derecha para buscar un Dmart específico.")
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.info("💡 **Tip:** Podés hacer clic en los nombres de las columnas para ordenar la tabla, o tocar la lupa arriba a la derecha de la tabla para buscar un Dmart específico.")
             
-            # Limpiamos y renombramos las columnas para que la tabla nativa sea legible
             df_mostrar = df_pivot[['warehouse_name', 'delta_volumen_diario', 'fail_rate_after', 'delta_fail_rate', 'dt_promedio_after', 'delta_dt', 'seamless_after', 'delta_seamless', 'Diagnostico']].copy()
-            
             df_mostrar.columns = ['Dmart', 'Vol Incremental/Día', 'FR After', 'Var. FR', 'DT After', 'Var. DT', 'Seamless After', 'Var. Seamless', 'Diagnóstico Operativo']
 
-            # Función para colorear el texto positivo/negativo de la columna de volumen
             def color_volumen(val):
                 color = '#27ae60' if val > 0 else '#c0392b'
                 return f'color: {color}; font-weight: bold;'
@@ -198,7 +212,6 @@ if ops_file is not None and audit_file is not None:
                 color = '#c0392b' if val >= 8.5 else '#2c3e50'
                 return f'color: {color}; font-weight: bold;'
 
-            # Aplicamos el estilo nativo de Pandas (Heatmap real e interactivo)
             styled_df = df_mostrar.style\
                 .map(color_volumen, subset=['Vol Incremental/Día'])\
                 .map(color_fr, subset=['FR After'])\
@@ -218,13 +231,13 @@ if ops_file is not None and audit_file is not None:
 
         # PESTAÑA 3: MAPA DE CONFIGURACIÓN
         with tab_mapa:
+            st.markdown("<br>", unsafe_allow_html=True)
             df_mapa_resumen.columns = ['Dmart', 'Horario Anterior', 'Nuevo Horario', 'Fecha de Modificación', 'Días Modificados']
             st.dataframe(df_mapa_resumen, use_container_width=True)
 
 else:
-    # Estado inicial cuando no hay archivos
     st.markdown("""
-        <div style="text-align: center; padding: 50px; background-color: #f8f9fa; border-radius: 8px; border: 2px dashed #bdc3c7;">
+        <div style="text-align: center; padding: 50px; background-color: #f8f9fa; border-radius: 8px; border: 2px dashed #bdc3c7; margin-top: 20px;">
             <h2 style="color: #7f8c8d;">Esperando datos...</h2>
             <p style="color: #95a5a6;">Por favor, subí los extractos de <strong>Operaciones</strong> y <strong>Auditoría</strong> en el panel izquierdo para comenzar a trabajar.</p>
         </div>
