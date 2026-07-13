@@ -1,8 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
+import plotly.express as px
 import warnings
 
 warnings.filterwarnings('ignore')
@@ -15,6 +14,7 @@ st.markdown("""
     <style>
         .block-container { padding-top: 2rem; padding-bottom: 2rem; }
         div[data-testid="stMetricValue"] { font-size: 1.8rem; font-weight: 800; color: #1f77b4; }
+        * { font-family: 'Outfit', sans-serif !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -126,6 +126,10 @@ if ops_file and audit_file:
         df_pivot['Cuadrante_Grafico'] = df_pivot.apply(categorizar_cuadrante, axis=1)
         df_pivot = df_pivot.sort_values(by='delta_volumen_diario', ascending=False).reset_index(drop=True)
 
+        # Redondear columnas para que el tooltip en Plotly sea más limpio
+        df_pivot['delta_volumen_diario_round'] = df_pivot['delta_volumen_diario'].round(1)
+        df_pivot['delta_fail_rate_round'] = df_pivot['delta_fail_rate'].round(1)
+
         # 5. EJECUTIVOS GLOBALES
         df_after_global = df_agrupado[df_agrupado['periodo'] == 'AFTER']
         total_tiendas = df_pivot['warehouse_name'].nunique()
@@ -138,14 +142,13 @@ if ops_file and audit_file:
         volumen_neto_ganado = run_rate_nacional * dias_after_periodo
 
         # ==============================================================================
-        # 6. RENDERIZADO 100% NATIVO DE STREAMLIT
+        # 6. RENDERIZADO 100% NATIVO DE STREAMLIT (CON PLOTLY)
         # ==============================================================================
         
         st.divider()
         
         # --- TARJETAS NATIVAS ---
         col1, col2, col3, col4 = st.columns(4)
-        
         with col1:
             with st.container(border=True):
                 st.metric("🏪 Dmarts Modificados", f"{total_tiendas}")
@@ -164,35 +167,59 @@ if ops_file and audit_file:
         # --- NAVEGACIÓN POR PESTAÑAS ---
         tab_matriz, tab_tabla, tab_mapa = st.tabs(["📈 Matriz de Impacto Visual", "📋 Diagnóstico Granular", "🗺️ Mapeo de Implementaciones"])
 
-        # PESTAÑA 1: MATRIZ
+        # PESTAÑA 1: MATRIZ (AHORA CON PLOTLY INTERACTIVO)
         with tab_matriz:
-            col_chart, col_spacer = st.columns([8, 1])
+            col_chart, col_spacer = st.columns([10, 1])
             with col_chart:
-                plt.rcParams['font.family'] = 'sans-serif'
-                sns.set_theme(style="whitegrid", context="talk")
-                fig_mat, ax_mat = plt.subplots(figsize=(10, 5))
                 
-                # Fondo transparente para adaptación al Dark/Light mode del usuario
-                fig_mat.patch.set_alpha(0.0)
-                ax_mat.patch.set_alpha(0.0)
+                # Mapeo de colores exacto
+                color_map = {
+                    "Éxito: Gana Vol, FR Controlado": "#27ae60",
+                    "Fricción: Gana Vol, pero Sube FR": "#f39c12",
+                    "Sin Tracción: Pierde Vol, FR Controlado": "#95a5a6",
+                    "Alerta: Pierde Vol y Sube FR": "#c0392b"
+                }
+
+                # Crear el gráfico interactivo con Plotly Express
+                fig = px.scatter(
+                    df_pivot,
+                    x='delta_fail_rate',
+                    y='delta_volumen_diario',
+                    color='Cuadrante_Grafico',
+                    color_discrete_map=color_map,
+                    hover_name='warehouse_name',
+                    hover_data={
+                        'delta_fail_rate': False, # Lo ocultamos para mostrar el redondeado
+                        'delta_volumen_diario': False,
+                        'Cuadrante_Grafico': False,
+                        'delta_fail_rate_round': True,
+                        'delta_volumen_diario_round': True
+                    },
+                    labels={
+                        'delta_fail_rate_round': 'Var. Fail Rate (%)',
+                        'delta_volumen_diario_round': 'Volumen Extra (órd/día)',
+                        'Cuadrante_Grafico': 'Cuadrante'
+                    },
+                    title='Matriz de Impacto: Órdenes Incrementales vs Variación de Fail Rate'
+                )
+
+                # Ajustes de diseño de Plotly
+                fig.update_traces(marker=dict(size=14, line=dict(width=1, color='DarkSlateGrey')))
                 
-                palette = {"Éxito: Gana Vol, FR Controlado": "#27ae60", "Fricción: Gana Vol, pero Sube FR": "#f39c12", "Sin Tracción: Pierde Vol, FR Controlado": "#95a5a6", "Alerta: Pierde Vol y Sube FR": "#c0392b"}
-                sns.scatterplot(data=df_pivot, x='delta_fail_rate', y='delta_volumen_diario', hue='Cuadrante_Grafico', palette=palette, s=150, alpha=0.85, edgecolor='black', ax=ax_mat)
+                # Agregar las líneas punteadas en el eje 0 (cruz)
+                fig.add_vline(x=0, line_dash="dash", line_color="gray", opacity=0.6)
+                fig.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.6)
+
+                fig.update_layout(
+                    xaxis_title='Variación de Fail Rate (%)',
+                    yaxis_title='Órdenes Adicionales por Día',
+                    legend_title_text='Lectura del Cuadrante',
+                    margin=dict(l=20, r=20, t=50, b=20),
+                    hoverlabel=dict(bgcolor="white", font_size=13, font_family="Arial")
+                )
                 
-                ax_mat.axvline(x=0, color='gray', linestyle='--', linewidth=1.5, alpha=0.5)
-                ax_mat.axhline(y=0, color='gray', linestyle='--', linewidth=1.5, alpha=0.5)
-                ax_mat.set_title('Órdenes Incrementales vs Variación de Fail Rate', fontsize=14, weight='bold', pad=15)
-                ax_mat.set_xlabel('Variación de Fail Rate (%)', weight='bold', fontsize=11)
-                ax_mat.set_ylabel('Órdenes Adicionales por Día', weight='bold', fontsize=11)
-                
-                # Estilo de leyenda adaptativo
-                legend = ax_mat.legend(title='Lectura del Cuadrante', bbox_to_anchor=(1.02, 1), loc='upper left', fontsize=10, title_fontsize=11)
-                frame = legend.get_frame()
-                frame.set_facecolor('white')
-                frame.set_alpha(0.8)
-                
-                sns.despine()
-                st.pyplot(fig_mat)
+                # Renderizar en Streamlit (se adapta automático al tema Dark/Light del usuario)
+                st.plotly_chart(fig, use_container_width=True, theme="streamlit")
 
         # PESTAÑA 2: TABLA INTERACTIVA (PANDAS STYLER)
         with tab_tabla:
